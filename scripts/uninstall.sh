@@ -3,9 +3,11 @@
 set -eu
 
 PROJECT_ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
-INSTALL_APP="/Applications/BluetoothStatus.app"
+# Paths are overridable so uninstall can be exercised in isolated temporary
+# directories; production defaults are unchanged.
+INSTALL_APP="${BLUETOOTH_STATUS_INSTALL_APP:-/Applications/BluetoothStatus.app}"
 LABEL="com.justin.bluetoothstatus"
-TARGET_DIR="$HOME/Library/LaunchAgents"
+TARGET_DIR="${BLUETOOTH_STATUS_LAUNCH_AGENT_DIR:-$HOME/Library/LaunchAgents}"
 TARGET_PLIST="$TARGET_DIR/$LABEL.plist"
 DOMAIN="gui/$(id -u)"
 SERVICE="$DOMAIN/$LABEL"

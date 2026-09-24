@@ -12,13 +12,17 @@
 - 任意一个蓝牙音频设备连接时显示 `B`；
 - 蓝牙音频设备都断开时显示带斜杠的 `B`；
 - 没有发现音频设备或系统无法枚举时显示 `?`；
+- 蓝牙控制器关闭时显示 `?` 和 "Bluetooth is off"（读取公开的 `IOBluetoothHostController.powerState`）；
 - 图标是显式绘制的矢量 `B`，不依赖系统模板图标或电池 API；
 - 图标颜色自动采用菜单栏反色：深色菜单栏用白色，浅色菜单栏用黑色；
 - 监听 IOBluetooth 专用连接 callback 和设备断开通知；
 - 菜单中列出每个蓝牙音频设备及其状态；
 - 支持立即刷新和退出；
 - 为 VoiceOver 提供状态标签和状态值；
-- 监听唤醒、应用激活、设备信息变化和外观变化。
+- 监听唤醒、应用激活、设备信息变化和外观变化；
+- 单次读取 10 秒超时，卡住时显示"无法读取"，后续刷新会自动恢复；
+- 设备名中的换行与控制字符在 `--dump` 中转义、在菜单中过滤，无法伪造输出行或注入终端控制序列；
+- 连接通知注册失败时菜单显示降级提示，30 秒定时刷新仍然工作。
 
 ## 连接状态逻辑
 
@@ -29,7 +33,10 @@ IOBluetoothDevice.pairedDevices()
 device.nameOrAddress
 device.addressString
 device.isConnected()
+IOBluetoothHostController.default().powerState
 ```
+
+控制器电源状态用于区分"蓝牙关闭"（`?` 和 "Bluetooth is off"）与其他状态。如果配对列表中混入无法解释的元素，整体按"无法读取"处理，而不是静默丢弃该设备后显示"已断开"。
 
 设备筛选条件：
 
@@ -55,6 +62,8 @@ cd ~/make/bluetooth-status
 make test
 make
 ```
+
+`make` 默认以 `uname -m` 作为目标架构（arm64 / x86_64），可用 `make TARGET_ARCH=arm64` 覆盖。`make test` 运行 Swift 单元测试、shell 语法检查，以及完全隔离的安装/回滚冒烟测试（临时目录 + launchctl 垫片，不触碰真实系统）。
 
 构建产物：
 
@@ -86,13 +95,14 @@ make dump
 输出类似：
 
 ```text
-state=connected
-status=已连接
-connected=1
-audio_devices=2
-device=Redmi Buds 6 address=00:11:22:33:44:55 connected=true
-device=Studio Headphones address=AA-BB-CC-DD-EE-FF connected=false
+state=disconnected
+status=Disconnected
+connected=0
+audio_devices=1
+device=Redmi Buds 6 address=64-8f-db-6e-bb-4a connected=false
 ```
+
+`--dump` 对设备名和地址中的换行、反斜杠和控制字符做转义（如换行输出为字面量 `\n`、ESC 输出为 `\u{1B}`）。输出行数只由字段决定，设备名无法伪造 `state=` 等行，也不会把终端控制序列写入管道。
 
 ## 开机启动
 

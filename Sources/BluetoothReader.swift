@@ -1,57 +1,62 @@
 import Foundation
 import IOBluetooth
 
+/// Adapts the Objective-C device to the testable descriptor protocol. The
+/// imported `String!` properties cannot satisfy `String?` requirements
+/// directly, so the conversion happens here once.
+private struct IOBluetoothDeviceDescriptor: BluetoothDeviceDescriptor {
+    let device: IOBluetoothDevice
+
+    var nameOrAddress: String? { device.nameOrAddress }
+    var addressString: String? { device.addressString }
+    var deviceClassMajor: UInt32 { device.deviceClassMajor }
+    var isHandsFreeDevice: Bool { device.isHandsFreeDevice }
+    var isHandsFreeAudioGateway: Bool { device.isHandsFreeAudioGateway }
+
+    func isConnected() -> Bool {
+        device.isConnected()
+    }
+}
+
 enum BluetoothStatusReader {
     static func readSnapshot() -> BluetoothStatusSnapshot {
-        BluetoothStatusSnapshot(devices: readAudioDevices())
+        BluetoothStatusSnapshot(
+            devices: readAudioDevices(),
+            powerState: readPowerState()
+        )
     }
 
     static func readAudioDevices() -> [BluetoothDeviceInfo]? {
-        guard let objects = IOBluetoothDevice.pairedDevices() else {
+        guard let pairedDevices = IOBluetoothDevice.pairedDevices() else {
             return nil
         }
-
-        let devices = objects.compactMap { object -> BluetoothDeviceInfo? in
-            guard let device = object as? IOBluetoothDevice,
-                  isAudioDevice(device) else {
-                return nil
+        let wrapped: [Any] = pairedDevices.map { object in
+            if let device = object as? IOBluetoothDevice {
+                return IOBluetoothDeviceDescriptor(device: device)
             }
-            return BluetoothDeviceInfo(
-                name: device.nameOrAddress,
-                address: device.addressString,
-                isConnected: device.isConnected()
-            )
+            // Keep the unexpected element so the aggregator fails closed.
+            return object
         }
-        return StatusLogic.sorted(devices)
+        return BluetoothDeviceAggregator.audioDevices(from: wrapped)
+    }
+
+    static func readPowerState() -> BluetoothPowerState {
+        guard let controller = IOBluetoothHostController.default() else {
+            return .unknown
+        }
+        // BluetoothHCIPowerState: kBluetoothHCIPowerStateON = 0x01,
+        // kBluetoothHCIPowerStateOFF = 0x00 (Bluetooth.h:2765-2767).
+        switch controller.powerState.rawValue {
+        case 0x01:
+            return .on
+        case 0x00:
+            return .off
+        default:
+            return .unknown
+        }
     }
 
     static func dump() -> String {
-        let snapshot = readSnapshot()
-        let descriptor = StatusLogic.descriptor(for: snapshot.state)
-        var lines = [
-            "state=\(String(describing: snapshot.state))",
-            "status=\(descriptor.statusText)",
-            "connected=\(snapshot.connectedDevices.count)"
-        ]
-
-        if let devices = snapshot.devices {
-            lines.append("audio_devices=\(devices.count)")
-            for device in devices {
-                lines.append("device=\(device.name) address=\(device.address) connected=\(device.isConnected)")
-            }
-        } else {
-            lines.append("audio_devices=unavailable")
-        }
-        return lines.joined(separator: "\n")
-    }
-
-    private static func isAudioDevice(_ device: IOBluetoothDevice) -> Bool {
-        // Class major Audio covers ordinary Bluetooth headsets/earbuds. The
-        // HFP checks also catch devices whose cached class is incomplete.
-        AudioDeviceClassifier.matches(
-            deviceClassMajor: device.deviceClassMajor,
-            isHandsFreeDevice: device.isHandsFreeDevice,
-            isHandsFreeAudioGateway: device.isHandsFreeAudioGateway
-        )
+        StatusLogic.dumpLines(for: readSnapshot()).joined(separator: "\n")
     }
 }
