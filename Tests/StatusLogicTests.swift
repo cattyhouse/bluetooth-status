@@ -26,8 +26,6 @@ struct StatusLogicTests {
         coordinatorCapsStuckWorkers()
         descriptors()
         liveUpdateNotice()
-        powerTickPolicy()
-        powerWatcherSamplesPeriodically()
         print("StatusLogicTests: PASS")
     }
 
@@ -315,98 +313,6 @@ struct StatusLogicTests {
         )
     }
 
-    private static func powerTickPolicy() {
-        let healthy = BluetoothStatusSnapshot(
-            devices: [device(name: "Earbuds", connected: false)],
-            powerState: .on
-        )
-        let degraded = BluetoothStatusSnapshot(devices: nil)
-
-        expect(
-            StatusLogic.shouldRefreshOnTick(
-                lastSnapshot: healthy,
-                previousPowerState: .on,
-                currentPowerState: .on,
-                secondsSinceLastAttempt: 60,
-                degradedRetryInterval: 3
-            ) == false,
-            "A healthy snapshot must not refresh on every sample"
-        )
-        expect(
-            StatusLogic.shouldRefreshOnTick(
-                lastSnapshot: healthy,
-                previousPowerState: .on,
-                currentPowerState: .off,
-                secondsSinceLastAttempt: 60,
-                degradedRetryInterval: 3
-            ),
-            "A power state change must refresh immediately"
-        )
-        expect(
-            StatusLogic.shouldRefreshOnTick(
-                lastSnapshot: healthy,
-                previousPowerState: .off,
-                currentPowerState: .on,
-                secondsSinceLastAttempt: 0,
-                degradedRetryInterval: 3
-            ),
-            "Powering the controller back on must refresh immediately"
-        )
-        expect(
-            StatusLogic.shouldRefreshOnTick(
-                lastSnapshot: degraded,
-                previousPowerState: .on,
-                currentPowerState: .on,
-                secondsSinceLastAttempt: 10,
-                degradedRetryInterval: 3
-            ),
-            "A failed read must be retried instead of waiting for the slow refresh"
-        )
-        expect(
-            StatusLogic.shouldRefreshOnTick(
-                lastSnapshot: degraded,
-                previousPowerState: .on,
-                currentPowerState: .on,
-                secondsSinceLastAttempt: 1,
-                degradedRetryInterval: 3
-            ) == false,
-            "A failed read must not be retried in a tight loop"
-        )
-        expect(
-            StatusLogic.shouldRefreshOnTick(
-                lastSnapshot: nil,
-                previousPowerState: .on,
-                currentPowerState: .on,
-                secondsSinceLastAttempt: 60,
-                degradedRetryInterval: 3
-            ) == false,
-            "Without a snapshot there is nothing to recover from"
-        )
-    }
-
-    private static func powerWatcherSamplesPeriodically() {
-        let counter = SampleCounter()
-        let watcher = PowerStateWatcher(
-            interval: 0.05,
-            readState: { .on },
-            onSample: { state in
-                counter.record(state)
-            }
-        )
-        watcher.start()
-        let deadline = Date().addingTimeInterval(2)
-        while Date() < deadline && counter.count < 3 {
-            RunLoop.main.run(mode: .default, before: Date().addingTimeInterval(0.02))
-        }
-        expect(counter.count >= 3, "The watcher must sample the power state repeatedly")
-        expect(counter.allOn, "Every sample must carry the observed power state")
-
-        watcher.stop()
-        let countAfterStop = counter.count
-        RunLoop.main.run(mode: .default, before: Date().addingTimeInterval(0.3))
-        expect(counter.count == countAfterStop, "A stopped watcher must not sample any more")
-    }
-
     private static func makeCoordinator(
         reader: ManualReader,
         scheduler: ManualTimeoutScheduler,
@@ -520,14 +426,4 @@ private final class ManualReader {
 
 private final class SnapshotRecorder {
     var snapshots: [BluetoothStatusSnapshot] = []
-}
-
-private final class SampleCounter {
-    private(set) var count = 0
-    private(set) var allOn = true
-
-    func record(_ state: BluetoothPowerState) {
-        count += 1
-        allOn = allOn && state == .on
-    }
 }

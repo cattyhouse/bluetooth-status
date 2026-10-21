@@ -15,7 +15,6 @@ A read-only macOS menu bar app that shows whether Bluetooth audio devices are co
 - Shows `?` and "Bluetooth is off" when the controller is powered off (public `IOBluetoothHostController.powerState`).
 - Uses a vector icon with menu-bar contrast: white on dark bars, black on light bars.
 - Updates from IOBluetooth connect/disconnect events, wake/activation events, device changes, and appearance changes.
-- Samples the controller power state once a second, so the icon follows the Bluetooth switch within about one second.
 - Bounds every blocking read with a 10-second deadline and recovers on later refreshes.
 - Escapes line breaks and control characters in `--dump`, and strips them from menu text, so a device name cannot forge output lines or inject terminal sequences.
 - Surfaces a degraded notice when connect notifications cannot be registered; the 30-second refresh still runs.
@@ -40,14 +39,6 @@ Controller power state distinguishes "Bluetooth is off" from the other states. I
 A device is included when its Bluetooth Device Class Major is Audio, or when it reports Hands-Free or Hands-Free Audio Gateway. This favors broad headset detection, but some Bluetooth speakers may also appear.
 
 The app does not read battery data, connect, disconnect, pair, unpair, or modify Bluetooth settings.
-
-## Update Model
-
-The device list is never polled: it is read on events only.
-
-The app reads the current state once at launch. Connections use `IOBluetoothDevice.register(forConnectNotifications:selector:)`, disconnections use the `IOBluetoothDeviceDisconnected` notification, and the app also listens for wake, activation, device information, and appearance changes. A device list read happens only for those events; the 30-second refresh is a recovery fallback. The "Refresh" menu item triggers a read on demand.
-
-macOS posts no notification for the Bluetooth switch in Control Center (`IOBluetoothHostControllerPoweredOn`/`PoweredOff` are not delivered), so only the controller power state is sampled once a second. That sample reads a cached framework property (10,000 reads measured at about 0.9 ms in total); it does not enumerate devices and never connects to or changes a Bluetooth device. When the power state changes, the app reads again immediately, so the icon follows the switch within about one second. A failed read is retried after 3 seconds instead of waiting for the 30-second fallback.
 
 ## Build
 

@@ -20,13 +20,10 @@ Show Bluetooth audio connection state in the macOS menu bar. Read `IOBluetoothDe
 - Escaped `--dump` fields and control-character-free menu names
 - Bluetooth-off state from the public controller power state
 - Visible degraded mode when connect notifications cannot be registered
-- One-second sampling of the controller power state so the icon follows the
-  Bluetooth switch; a failed read is retried after 3 seconds
 
 ## Acceptance
 
 - Detect connected, disconnected, missing, unavailable, and Bluetooth-off states
-- Follow the Bluetooth switch within about one second in both directions
 - Enumerate paired Bluetooth audio devices without hard-coded addresses
 - Never call connection, pairing, or battery APIs
 - Build with warnings treated as errors

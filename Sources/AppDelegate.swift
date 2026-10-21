@@ -5,25 +5,15 @@ import IOBluetooth
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private static let readTimeout: TimeInterval = 10
     private static let maxStuckReaders = 2
-    /// How often the controller power state is sampled. macOS does not post a
-    /// notification when the user flips the Bluetooth switch, so the app
-    /// samples it to keep the icon in step with the switch.
-    private static let powerWatchInterval: TimeInterval = 1
-    /// How long to wait before retrying a read that failed.
-    private static let degradedRetryInterval: TimeInterval = 3
 
     private var statusItem: NSStatusItem?
     private var notificationTokens: [NSObjectProtocol] = []
     private var connectRegistration: IOBluetoothUserNotification?
     private var appearanceObservation: NSKeyValueObservation?
     private var maintenanceTimer: Timer?
-    private var powerWatcher: PowerStateWatcher?
     private var refreshCoordinator: RefreshCoordinator?
     private var liveUpdatesAvailable = true
     private var lastRendered: RenderedState?
-    private var lastSnapshot: BluetoothStatusSnapshot?
-    private var lastObservedPowerState: BluetoothPowerState = .unknown
-    private var lastRefreshAttempt = Date.distantPast
 
     private struct RenderedState: Equatable {
         let snapshot: BluetoothStatusSnapshot
@@ -34,10 +24,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private let connectedNotification = Notification.Name(rawValue: "IOBluetoothDeviceConnected")
     private let disconnectedNotification = Notification.Name(rawValue: "IOBluetoothDeviceDisconnected")
-    private let powerNotifications: [Notification.Name] = [
-        .IOBluetoothHostControllerPoweredOn,
-        .IOBluetoothHostControllerPoweredOff
-    ]
     private let deviceChangeNotifications = [
         Notification.Name(rawValue: "IOBluetoothDeviceNameChanged"),
         Notification.Name(rawValue: "IOBluetoothDeviceInquiryInfoChanged"),
@@ -51,7 +37,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         installLifecycleObservers()
         installAppearanceObservation()
         installRefreshCoordinator()
-        installPowerWatcher()
         startMaintenanceTimer()
         requestRefresh()
     }
@@ -67,8 +52,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         appearanceObservation = nil
         maintenanceTimer?.invalidate()
         maintenanceTimer = nil
-        powerWatcher?.stop()
-        powerWatcher = nil
         refreshCoordinator = nil
     }
 
@@ -82,19 +65,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func installBluetoothNotifications() {
         let center = NotificationCenter.default
         for name in [connectedNotification, disconnectedNotification] + deviceChangeNotifications {
-            let token = center.addObserver(
-                forName: name,
-                object: nil,
-                queue: .main
-            ) { [weak self] _ in
-                self?.requestRefresh()
-            }
-            notificationTokens.append(token)
-        }
-
-        // Some macOS versions announce controller power changes. They are
-        // cheap to observe and refresh the icon immediately when they arrive.
-        for name in powerNotifications {
             let token = center.addObserver(
                 forName: name,
                 object: nil,
@@ -186,35 +156,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         )
     }
 
-    /// Samples the controller power state so the icon follows the Bluetooth
-    /// switch even when the system posts no notification for it.
-    private func installPowerWatcher() {
-        let watcher = PowerStateWatcher(
-            interval: Self.powerWatchInterval,
-            readState: { BluetoothStatusReader.readPowerState() },
-            onSample: { [weak self] state in
-                self?.handlePowerSample(state)
-            }
-        )
-        watcher.start()
-        powerWatcher = watcher
-    }
-
-    private func handlePowerSample(_ state: BluetoothPowerState) {
-        let previous = lastObservedPowerState
-        lastObservedPowerState = state
-        let shouldRefresh = StatusLogic.shouldRefreshOnTick(
-            lastSnapshot: lastSnapshot,
-            previousPowerState: previous,
-            currentPowerState: state,
-            secondsSinceLastAttempt: Date().timeIntervalSince(lastRefreshAttempt),
-            degradedRetryInterval: Self.degradedRetryInterval
-        )
-        if shouldRefresh {
-            requestRefresh()
-        }
-    }
-
     private func startMaintenanceTimer() {
         let timer = Timer(timeInterval: 30.0, repeats: true) { [weak self] _ in
             self?.attemptConnectRegistration()
@@ -240,12 +181,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
             return
         }
-        lastRefreshAttempt = Date()
         refreshCoordinator?.requestRefresh()
     }
 
     private func apply(_ snapshot: BluetoothStatusSnapshot) {
-        lastSnapshot = snapshot
         guard let button = statusItem?.button else { return }
 
         let descriptor = StatusLogic.descriptor(for: snapshot.state)

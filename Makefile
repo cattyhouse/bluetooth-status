@@ -16,13 +16,11 @@ SOURCES := \
 	Sources/AppDelegate.swift \
 	Sources/StatusLogic.swift \
 	Sources/RefreshCoordinator.swift \
-	Sources/PowerStateWatcher.swift \
 	Sources/main.swift
 
 TEST_SOURCES := \
 	Sources/StatusLogic.swift \
 	Sources/RefreshCoordinator.swift \
-	Sources/PowerStateWatcher.swift \
 	Tests/StatusLogicTests.swift
 
 SWIFT_FLAGS := -swift-version 5 -O -warnings-as-errors -sdk "$(SDK)" -target $(TARGET)
