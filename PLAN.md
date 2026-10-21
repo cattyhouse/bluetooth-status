@@ -20,10 +20,13 @@ Show Bluetooth audio connection state in the macOS menu bar. Read `IOBluetoothDe
 - Escaped `--dump` fields and control-character-free menu names
 - Bluetooth-off state from the public controller power state
 - Visible degraded mode when connect notifications cannot be registered
+- Bluetooth switch changes reported by CoreBluetooth, so the icon follows the
+  switch without any polling
 
 ## Acceptance
 
 - Detect connected, disconnected, missing, unavailable, and Bluetooth-off states
+- Follow the Bluetooth switch within about half a second in both directions
 - Enumerate paired Bluetooth audio devices without hard-coded addresses
 - Never call connection, pairing, or battery APIs
 - Build with warnings treated as errors
@@ -35,6 +38,8 @@ Show Bluetooth audio connection state in the macOS menu bar. Read `IOBluetoothDe
 - `make test`: `StatusLogicTests: PASS` and `InstallRollbackTests: PASS`
 - `make install`: overwrites the app and LaunchAgent, then reports `state=running`
 - `make dump`: reports the current `isConnected()` state with escaped fields
+- Installed app: Bluetooth off reacts after 0.105 s, Bluetooth on after 0.42 s
+- Starting the app with Bluetooth off leaves the controller off
 - Install rollback test: a staging failure leaves a running service untouched
 - App bundle: approximately 180 KB; resident memory approximately 40 MB (measured)
 - Build and installed binaries have matching SHA-256 hashes

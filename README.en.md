@@ -15,6 +15,7 @@ A read-only macOS menu bar app that shows whether Bluetooth audio devices are co
 - Shows `?` and "Bluetooth is off" when the controller is powered off (public `IOBluetoothHostController.powerState`).
 - Uses a vector icon with menu-bar contrast: white on dark bars, black on light bars.
 - Updates from IOBluetooth connect/disconnect events, wake/activation events, device changes, and appearance changes.
+- Follows the Bluetooth switch through CoreBluetooth, so the icon reacts in well under a second.
 - Bounds every blocking read with a 10-second deadline and recovers on later refreshes.
 - Escapes line breaks and control characters in `--dump`, and strips them from menu text, so a device name cannot forge output lines or inject terminal sequences.
 - Surfaces a degraded notice when connect notifications cannot be registered; the 30-second refresh still runs.
@@ -39,6 +40,16 @@ Controller power state distinguishes "Bluetooth is off" from the other states. I
 A device is included when its Bluetooth Device Class Major is Audio, or when it reports Hands-Free or Hands-Free Audio Gateway. This favors broad headset detection, but some Bluetooth speakers may also appear.
 
 The app does not read battery data, connect, disconnect, pair, unpair, or modify Bluetooth settings.
+
+## Update Model
+
+The device list is never polled: it is read on events only.
+
+The app reads the current state once at launch. Connections use `IOBluetoothDevice.register(forConnectNotifications:selector:)`, disconnections use the `IOBluetoothDeviceDisconnected` notification, and the app also listens for wake, activation, device information, and appearance changes.
+
+Bluetooth switch changes come from CoreBluetooth: macOS broadcasts no IOBluetooth notification for the Control Center switch, but `CBCentralManager` reports the new state in the same millisecond. The observer only listens — it never scans, connects, pairs, or changes any Bluetooth setting, and it never powers the radio on (verified: starting the app with Bluetooth off leaves the controller off).
+
+So the app polls nothing. The 30-second refresh is a recovery fallback, and the "Refresh" menu item triggers a read on demand. If the system withholds Bluetooth access, the CoreBluetooth callback stops working and the menu shows "Live updates unavailable; using periodic refresh".
 
 ## Build
 

@@ -16,11 +16,13 @@ SOURCES := \
 	Sources/AppDelegate.swift \
 	Sources/StatusLogic.swift \
 	Sources/RefreshCoordinator.swift \
+	Sources/BluetoothStateObserver.swift \
 	Sources/main.swift
 
 TEST_SOURCES := \
 	Sources/StatusLogic.swift \
 	Sources/RefreshCoordinator.swift \
+	Sources/BluetoothStateObserver.swift \
 	Tests/StatusLogicTests.swift
 
 SWIFT_FLAGS := -swift-version 5 -O -warnings-as-errors -sdk "$(SDK)" -target $(TARGET)
@@ -44,7 +46,7 @@ test: $(TEST_BIN)
 
 $(TEST_BIN): $(TEST_SOURCES)
 	@mkdir -p "$(BUILD_DIR)"
-	$(SWIFT) $(SWIFT_FLAGS) -parse-as-library -framework Foundation $(TEST_SOURCES) -o "$(TEST_BIN)"
+	$(SWIFT) $(SWIFT_FLAGS) -parse-as-library -framework Foundation -framework CoreBluetooth $(TEST_SOURCES) -o "$(TEST_BIN)"
 
 dump: $(BIN)
 	@"$(BIN)" --dump

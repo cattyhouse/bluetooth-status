@@ -11,9 +11,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var connectRegistration: IOBluetoothUserNotification?
     private var appearanceObservation: NSKeyValueObservation?
     private var maintenanceTimer: Timer?
+    private var stateObserver: BluetoothStateObserver?
     private var refreshCoordinator: RefreshCoordinator?
-    private var liveUpdatesAvailable = true
+    private var connectRegistrationAvailable = false
+    private var stackObserverReportsChanges = true
     private var lastRendered: RenderedState?
+
+    /// Whether the app can announce Bluetooth changes as they happen.
+    private var liveUpdatesAvailable: Bool {
+        connectRegistrationAvailable && stackObserverReportsChanges
+    }
 
     private struct RenderedState: Equatable {
         let snapshot: BluetoothStatusSnapshot
@@ -37,6 +44,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         installLifecycleObservers()
         installAppearanceObservation()
         installRefreshCoordinator()
+        installStateObserver()
         startMaintenanceTimer()
         requestRefresh()
     }
@@ -52,6 +60,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         appearanceObservation = nil
         maintenanceTimer?.invalidate()
         maintenanceTimer = nil
+        stateObserver?.stop()
+        stateObserver = nil
         refreshCoordinator = nil
     }
 
@@ -88,7 +98,27 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             selector: #selector(handleConnectNotification(_:device:))
         )
         connectRegistration = registration
-        liveUpdatesAvailable = registration != nil
+        connectRegistrationAvailable = registration != nil
+    }
+
+    /// Watches the Bluetooth stack state.
+    ///
+    /// CoreBluetooth reports a Bluetooth switch change immediately, while the
+    /// IOBluetooth framework does not announce it at all. The observer only
+    /// listens; it never scans, connects, or changes any Bluetooth setting.
+    private func installStateObserver() {
+        let observer = BluetoothStateObserver { [weak self] state in
+            self?.handleStackStateChange(state)
+        }
+        observer.start()
+        stateObserver = observer
+    }
+
+    private func handleStackStateChange(_ state: BluetoothStackState) {
+        if let reportsChanges = state.reportsSwitchChanges {
+            stackObserverReportsChanges = reportsChanges
+        }
+        requestRefresh()
     }
 
     private func installLifecycleObservers() {

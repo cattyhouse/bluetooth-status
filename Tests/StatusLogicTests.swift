@@ -26,6 +26,7 @@ struct StatusLogicTests {
         coordinatorCapsStuckWorkers()
         descriptors()
         liveUpdateNotice()
+        stackStateMapping()
         print("StatusLogicTests: PASS")
     }
 
@@ -310,6 +311,40 @@ struct StatusLogicTests {
         expect(
             StatusLogic.liveUpdateNotice(available: false)?.isEmpty == false,
             "Failed registration must be visible"
+        )
+    }
+
+    private static func stackStateMapping() {
+        expect(BluetoothStackState(.poweredOn) == .poweredOn, "Powered on must map to poweredOn")
+        expect(BluetoothStackState(.poweredOff) == .poweredOff, "Powered off must map to poweredOff")
+        expect(BluetoothStackState(.resetting) == .resetting, "Resetting must map to resetting")
+        expect(BluetoothStackState(.unauthorized) == .unauthorized, "Unauthorized must map to unauthorized")
+        expect(BluetoothStackState(.unsupported) == .unsupported, "Unsupported must map to unsupported")
+        expect(BluetoothStackState(.unknown) == .unknown, "Unknown must map to unknown")
+
+        expect(
+            BluetoothStackState.poweredOn.reportsSwitchChanges == true,
+            "A powered-on stack announces switch changes"
+        )
+        expect(
+            BluetoothStackState.poweredOff.reportsSwitchChanges == true,
+            "A powered-off stack announces switch changes"
+        )
+        expect(
+            BluetoothStackState.resetting.reportsSwitchChanges == true,
+            "A resetting stack still reports state changes"
+        )
+        expect(
+            BluetoothStackState.unauthorized.reportsSwitchChanges == false,
+            "An unauthorized stack cannot report switch changes"
+        )
+        expect(
+            BluetoothStackState.unsupported.reportsSwitchChanges == false,
+            "An unsupported stack cannot report switch changes"
+        )
+        expect(
+            BluetoothStackState.unknown.reportsSwitchChanges == nil,
+            "An unknown stack must not overrule the previous answer"
         )
     }
 

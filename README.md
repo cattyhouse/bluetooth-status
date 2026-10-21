@@ -16,6 +16,7 @@
 - 图标是显式绘制的矢量 `B`，不依赖系统模板图标或电池 API；
 - 图标颜色自动采用菜单栏反色：深色菜单栏用白色，浅色菜单栏用黑色；
 - 监听 IOBluetooth 专用连接 callback 和设备断开通知；
+- 用 CoreBluetooth 监听蓝牙开关，切换后图标立即跟随（实测 0.1 秒内）；
 - 菜单中列出每个蓝牙音频设备及其状态；
 - 支持立即刷新和退出；
 - 为 VoiceOver 提供状态标签和状态值；
@@ -36,7 +37,9 @@ device.isConnected()
 IOBluetoothHostController.default().powerState
 ```
 
-控制器电源状态用于区分"蓝牙关闭"（`?` 和 "Bluetooth is off"）与其他状态。如果配对列表中混入无法解释的元素，整体按"无法读取"处理，而不是静默丢弃该设备后显示"已断开"。
+控制器电源状态用于区分“蓝牙关闭”（`?` 和 "Bluetooth is off"）与其他状态。如果配对列表中混入无法解释的元素，整体按“无法读取”处理，而不是静默丢弃该设备后显示“已断开”。
+
+蓝牙开关的变化由 CoreBluetooth 单独监听（`CBCentralManager` 的状态回调），它只用于触发重新读取，不参与状态判定。IOBluetooth 本身不广播开关变化。
 
 设备筛选条件：
 
@@ -49,9 +52,11 @@ IOBluetoothHostController.default().powerState
 
 ## 被动更新
 
-不需要每两秒轮询。
+设备列表不轮询：只在事件发生时重新读取。
 
-App 启动时读取一次当前状态。连接使用 `IOBluetoothDevice.register(forConnectNotifications:selector:)`，断开使用 `IOBluetoothDeviceDisconnected` 通知；同时监听唤醒、应用激活、设备信息变化和外观变化。没有 2 秒轮询，只有 30 秒一次的故障恢复兜底。菜单中的“立即刷新”可手动重新读取。
+App 启动时读取一次当前状态。连接使用 `IOBluetoothDevice.register(forConnectNotifications:selector:)`，断开使用 `IOBluetoothDeviceDisconnected` 通知；同时监听唤醒、应用激活、设备信息变化和外观变化。蓝牙开关的变化由 CoreBluetooth 的 `CBCentralManager` 状态回调提供——macOS 不会为控制中心的开关发布 IOBluetooth 通知，但 CoreBluetooth 会在切换的同一毫秒回调。监听器只听不做事：不扫描、不连接、不配对、不修改任何蓝牙设置，也不会替你打开蓝牙（实测蓝牙关闭时启动 App，控制器仍保持关闭）。
+
+因此 App 不做任何定时轮询，只有 30 秒一次的故障恢复兜底。菜单中的“立即刷新”可手动重新读取。若系统拒绝 App 的蓝牙权限，CoreBluetooth 回调会失效，菜单会提示“Live updates unavailable; using periodic refresh”。
 
 ## 构建
 
