@@ -16,6 +16,7 @@
 - 图标是显式绘制的矢量 `B`，不依赖系统模板图标或电池 API；
 - 图标颜色自动采用菜单栏反色：深色菜单栏用白色，浅色菜单栏用黑色；
 - 监听 IOBluetooth 专用连接 callback 和设备断开通知；
+- 每秒读取一次控制器电源状态，蓝牙开关切换后图标在 1 秒内跟着变；
 - 菜单中列出每个蓝牙音频设备及其状态；
 - 支持立即刷新和退出；
 - 为 VoiceOver 提供状态标签和状态值；
@@ -49,9 +50,11 @@ IOBluetoothHostController.default().powerState
 
 ## 被动更新
 
-不需要每两秒轮询。
+设备列表不轮询：只读一次，只有事件才触发重新读取。
 
-App 启动时读取一次当前状态。连接使用 `IOBluetoothDevice.register(forConnectNotifications:selector:)`，断开使用 `IOBluetoothDeviceDisconnected` 通知；同时监听唤醒、应用激活、设备信息变化和外观变化。没有 2 秒轮询，只有 30 秒一次的故障恢复兜底。菜单中的“立即刷新”可手动重新读取。
+App 启动时读取一次当前状态。连接使用 `IOBluetoothDevice.register(forConnectNotifications:selector:)`，断开使用 `IOBluetoothDeviceDisconnected` 通知；同时监听唤醒、应用激活、设备信息变化和外观变化。设备列表的读取只在这些事件发生时进行，30 秒一次的定时刷新只是故障恢复兜底。菜单中的“立即刷新”可手动重新读取。
+
+蓝牙开关本身没有对应的系统通知（macOS 不会为控制中心的开关发布 `IOBluetoothHostControllerPoweredOn`/`PoweredOff`），所以只有控制器电源状态会被每秒采样一次。这个采样读的是框架缓存的属性（实测 10000 次约 0.9 毫秒），不会触发设备枚举，也不会连接或修改任何蓝牙设备。发现电源状态变化后立即重新读取，图标因此在 1 秒内跟随蓝牙开关；上一次读取失败时，会在 3 秒后重试，而不是等到 30 秒的兜底刷新。
 
 ## 构建
 

@@ -262,4 +262,28 @@ enum StatusLogic {
     static func liveUpdateNotice(available: Bool) -> String? {
         available ? nil : "Live updates unavailable; using periodic refresh"
     }
+
+    /// Decides whether a power-state sample should start a new read.
+    ///
+    /// A changed controller power state always refreshes: the icon has to
+    /// follow the Bluetooth switch instead of waiting for the slow periodic
+    /// refresh. A degraded last snapshot (the read timed out or the device
+    /// list could not be enumerated) also refreshes, but only after a pause,
+    /// so a Bluetooth stack that is still starting is retried promptly
+    /// without spinning on a permanent failure.
+    static func shouldRefreshOnTick(
+        lastSnapshot: BluetoothStatusSnapshot?,
+        previousPowerState: BluetoothPowerState,
+        currentPowerState: BluetoothPowerState,
+        secondsSinceLastAttempt: TimeInterval,
+        degradedRetryInterval: TimeInterval
+    ) -> Bool {
+        if previousPowerState != currentPowerState {
+            return true
+        }
+        guard let lastSnapshot, lastSnapshot.state == .unavailable else {
+            return false
+        }
+        return secondsSinceLastAttempt >= degradedRetryInterval
+    }
 }
